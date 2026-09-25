@@ -1,1 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
 
+<title>Draw To Life</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#050509;
+    color:white;
+    font-family:Arial,sans-serif;
+}
+
+#canvas{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    touch-action:none;
+    cursor:crosshair;
+}
+
+.ui{
+    position:fixed;
+    z-index:5;
+    left:50%;
+    top:20px;
+    transform:translateX(-50%);
+    width:min(430px,92vw);
+    text-align:center;
+    pointer-events:none;
+}
+
+.logo{
+    font-size:12px;
+    letter-spacing:5px;
+    color:#aaa;
+}
+
+h1{
+    margin-top:8px;
+    font-family:Georgia,serif;
+    font-size:34px;
+    font-weight:normal;
+
+    background:linear-gradient(
+        90deg,
+        #fff,
+        #ff75b9,
+        #9b7cff,
+        #fff
+    );
+
+    background-size:300%;
+
+    -webkit-background-clip:text;
+    color:transparent;
+
+    animation:gradient 5s linear infinite;
+}
+
+.subtitle{
+    margin-top:8px;
+    font-size:12px;
+    color:#777;
+}
+
+.bottom{
+    position:fixed;
+    z-index:10;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%);
+    width:min(430px,92vw);
+}
+
+.controls{
+    display:flex;
+    gap:8px;
+    background:rgba(15,15,22,.8);
+    backdrop-filter:blur(15px);
+    padding:10px;
+    border:1px solid #ffffff12;
+    border-radius:18px;
+}
+
+button{
+    flex:1;
+    border:none;
+    border-radius:12px;
+    padding:12px 8px;
+    background:#ffffff09;
+    color:#ddd;
+    font-size:11px;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+button.active{
+    background:linear-gradient(
+        90deg,
+        #ff3c91,
+        #8955ff
+    );
+    color:white;
+}
+
+button:active{
+    transform:scale(.95);
+}
+
+.hint{
+    text-align:center;
+    color:#555;
+    font-size:10px;
+    margin-top:9px;
+}
+
+#message{
+    position:fixed;
+    z-index:20;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%) scale(.7);
+    width:min(360px,85vw);
+    padding:28px;
+    text-align:center;
+    border-radius:25px;
+
+    background:rgba(15,10,20,.8);
+    backdrop-filter:blur(20px);
+
+    border:1px solid #ff75b944;
+
+    box-shadow:
+        0 0 70px #ff3c9130;
+
+    opacity:0;
+    pointer-events:none;
+
+    transition:
+        .8s ease;
+}
+
+#message.show{
+    opacity:1;
+    transform:
+        translate(-50%,-50%)
+        scale(1);
+}
+
+#message h2{
+    font-family:Georgia,serif;
+    font-weight:normal;
+    color:#ff9dcc;
+    margin-bottom:12px;
+}
+
+#message p{
+    color:#ccc;
+    font-size:13px;
+    line-height:1.7;
+}
+
+.close{
+    margin-top:18px;
+    display:inline-block;
+    padding:9px 18px;
+    border-radius:30px;
+    background:#ffffff10;
+    color:#aaa;
+    font-size:11px;
+    cursor:pointer;
+}
+
+@keyframes gradient{
+
+    to{
+        background-position:300%;
+    }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div class="ui">
+
+    <div class="logo">
+        INTERACTIVE ART
+    </div>
+
+    <h1>
+        Draw Something Beautiful
+    </h1>
+
+    <div class="subtitle">
+        Your drawing is about to come alive.
+    </div>
+
+</div>
+
+
+<div class="bottom">
+
+    <div class="controls">
+
+        <button
+            id="drawBtn"
+            class="active"
+            onclick="setMode('draw')">
+            ✏ DRAW
+        </button>
+
+        <button
+            onclick="setMode('erase')">
+            ◌ ERASE
+        </button>
+
+        <button
+            onclick="animateDrawing()">
+            ✨ ANIMATE
+        </button>
+
+        <button
+            onclick="clearCanvas()">
+            ↻ CLEAR
+        </button>
+
+    </div>
+
+    <div class="hint">
+        Draw with your finger • Then press ANIMATE
+    </div>
+
+</div>
+
+
+<div id="message">
+
+    <h2>It Came Alive ✨</h2>
+
+    <p>
+        Every beautiful thing starts
+        with a single line.
+        <br><br>
+        Keep creating.
+    </p>
+
+    <div
+        class="close"
+        onclick="closeMessage()">
+        CLOSE
+    </div>
+
+</div>
+
+
+<script>
+
+const canvas=document.getElementById("canvas");
+
+const ctx=canvas.getContext("2d");
+
+let W,H;
+
+function resize(){
+
+    W=canvas.width=innerWidth*devicePixelRatio;
+    H=canvas.height=innerHeight*devicePixelRatio;
+
+    canvas.style.width=innerWidth+"px";
+    canvas.style.height=innerHeight+"px";
+
+    ctx.setTransform(
+        devicePixelRatio,
+        0,
+        0,
+        devicePixelRatio,
+        0,
+        0
+    );
+
+}
+
+resize();
+
+window.addEventListener("resize",resize);
+
+
+/* =========================
+   DRAWING DATA
+========================= */
+
+let paths=[];
+
+let currentPath=null;
+
+let drawing=false;
+
+let mode="draw";
+
+
+/* =========================
+   COLORS
+========================= */
+
+let hue=320;
+
+
+/* =========================
+   POINTER
+========================= */
+
+function position(e){
+
+    const rect=canvas.getBoundingClientRect();
+
+    return {
+
+        x:e.clientX-rect.left,
+
+        y:e.clientY-rect.top
+
+    };
+
+}
+
+canvas.addEventListener(
+    "pointerdown",
+    e=>{
+
+        drawing=true;
+
+        const p=position(e);
+
+        currentPath=[p];
+
+        paths.push(currentPath);
+
+        canvas.setPointerCapture(e.pointerId);
+
+    }
+);
+
+
+canvas.addEventListener(
+    "pointermove",
+    e=>{
+
+        if(!drawing)return;
+
+        const p=position(e);
+
+        currentPath.push(p);
+
+        drawLive();
+
+    }
+);
+
+
+canvas.addEventListener(
+    "pointerup",
+    ()=>{
+        drawing=false;
+    }
+);
+
+
+canvas.addEventListener(
+    "pointercancel",
+    ()=>{
+        drawing=false;
+    }
+);
+
+
+/* =========================
+   DRAW LIVE
+========================= */
+
+function drawLive(){
+
+    ctx.clearRect(
+        0,
+        0,
+        innerWidth,
+        innerHeight
+    );
+
+    paths.forEach(path=>{
+
+        if(path.length<2)return;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            path[0].x,
+            path[0].y
+        );
+
+        for(let i=1;i<path.length;i++){
+
+            ctx.lineTo(
+                path[i].x,
+                path[i].y
+            );
+
+        }
+
+        if(mode==="erase"){
+
+            ctx.globalCompositeOperation=
+                "destination-out";
+
+            ctx.lineWidth=25;
+
+            ctx.strokeStyle="white";
+
+        }else{
+
+            ctx.globalCompositeOperation=
+                "source-over";
+
+            ctx.lineWidth=3;
+
+            ctx.strokeStyle=
+                `hsl(${hue},100%,70%)`;
+
+            ctx.shadowBlur=15;
+
+            ctx.shadowColor=
+                `hsl(${hue},100%,60%)`;
+
+        }
+
+        ctx.lineCap="round";
+
+        ctx.lineJoin="round";
+
+        ctx.stroke();
+
+        ctx.shadowBlur=0;
+
+        ctx.globalCompositeOperation=
+            "source-over";
+
+    });
+
+}
+
+
+/* =========================
+   MODE
+========================= */
+
+function setMode(newMode){
+
+    mode=newMode;
+
+    document
+        .querySelectorAll("button")
+        .forEach(b=>b.classList.remove("active"));
+
+    if(newMode==="draw"){
+
+        document
+            .getElementById("drawBtn")
+            .classList.add("active");
+
+    }
+
+}
+
+
+/* =========================
+   CLEAR
+========================= */
+
+function clearCanvas(){
+
+    paths=[];
+
+    ctx.clearRect(
+        0,
+        0,
+        innerWidth,
+        innerHeight
+    );
+
+    document
+        .getElementById("message")
+        .classList.remove("show");
+
+}
+
+
+/* =========================
+   ANIMATION
+========================= */
+
+async function animateDrawing(){
+
+    if(paths.length===0){
+
+        createDemoHeart();
+
+    }
+
+    const saved=[...paths];
+
+    paths=[];
+
+    ctx.clearRect(
+        0,
+        0,
+        innerWidth,
+        innerHeight
+    );
+
+    for(let p of saved){
+
+        let animated=[];
+
+        paths.push(animated);
+
+        for(let point of p){
+
+            animated.push(point);
+
+            drawLive();
+
+            await wait(5);
+
+        }
+
+    }
+
+    createParticles();
+
+    setTimeout(()=>{
+
+        document
+            .getElementById("message")
+            .classList.add("show");
+
+    },800);
+
+}
+
+
+/* =========================
+   DEMO HEART
+========================= */
+
+function createDemoHeart(){
+
+    const cx=innerWidth/2;
+
+    const cy=innerHeight/2;
+
+    const path=[];
+
+    for(let t=0;t<=Math.PI*2;t+=.04){
+
+        const x=
+            16*Math.pow(Math.sin(t),3);
+
+        const y=
+            13*Math.cos(t)
+            -5*Math.cos(2*t)
+            -2*Math.cos(3*t)
+            -Math.cos(4*t);
+
+        path.push({
+
+            x:cx+x*8,
+
+            y:cy-y*8
+
+        });
+
+    }
+
+    paths=[path];
+
+}
+
+
+/* =========================
+   PARTICLES
+========================= */
+
+let particles=[];
+
+function createParticles(){
+
+    const cx=innerWidth/2;
+
+    const cy=innerHeight/2;
+
+    for(let i=0;i<100;i++){
+
+        const a=
+            Math.random()*Math.PI*2;
+
+        const speed=
+            Math.random()*5+2;
+
+        particles.push({
+
+            x:cx,
+
+            y:cy,
+
+            vx:Math.cos(a)*speed,
+
+            vy:Math.sin(a)*speed,
+
+            life:1
+
+        });
+
+    }
+
+}
+
+function particleLoop(){
+
+    ctx.save();
+
+    particles.forEach((p,i)=>{
+
+        p.x+=p.vx;
+
+        p.y+=p.vy;
+
+        p.vx*=.98;
+
+        p.vy*=.98;
+
+        p.life-=.018;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            p.x,
+            p.y,
+            2,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle=
+            `hsla(${320+i%60},100%,70%,${p.life})`;
+
+        ctx.shadowBlur=15;
+
+        ctx.shadowColor="#ff5ca8";
+
+        ctx.fill();
+
+        if(p.life<=0){
+
+            particles.splice(i,1);
+
+        }
+
+    });
+
+    ctx.restore();
+
+    requestAnimationFrame(particleLoop);
+
+}
+
+particleLoop();
+
+
+/* =========================
+   CLOSE
+========================= */
+
+function closeMessage(){
+
+    document
+        .getElementById("message")
+        .classList.remove("show");
+
+}
+
+
+/* =========================
+   UTILITY
+========================= */
+
+function wait(ms){
+
+    return new Promise(
+        resolve=>setTimeout(resolve,ms)
+    );
+
+}
+
+</script>
+
+</body>
+</html>

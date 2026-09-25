@@ -1,1 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dukaan Price & Bill</title>
 
+<style>
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#f3f5f7;
+    color:#222;
+}
+
+header{
+    background:#1769aa;
+    color:white;
+    padding:18px;
+    text-align:center;
+}
+
+header h1{
+    margin:0 0 5px;
+    font-size:24px;
+}
+
+header p{
+    margin:0;
+    opacity:.9;
+}
+
+.container{
+    max-width:650px;
+    margin:auto;
+    padding:15px;
+}
+
+.card{
+    background:white;
+    padding:18px;
+    border-radius:14px;
+    margin-bottom:15px;
+    box-shadow:0 3px 12px #00000012;
+}
+
+h2{
+    margin-top:0;
+    font-size:20px;
+}
+
+input, select, button{
+    width:100%;
+    padding:13px;
+    margin:7px 0;
+    border-radius:9px;
+    border:1px solid #ccc;
+    font-size:16px;
+}
+
+button{
+    border:0;
+    background:#1769aa;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+button.green{
+    background:#198754;
+}
+
+button.red{
+    background:#dc3545;
+}
+
+.product{
+    border:1px solid #ddd;
+    padding:13px;
+    border-radius:10px;
+    margin-top:10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+}
+
+.product-info{
+    flex:1;
+}
+
+.product-name{
+    font-weight:bold;
+    font-size:17px;
+}
+
+.price{
+    color:#198754;
+    margin-top:4px;
+}
+
+.small-btn{
+    width:auto;
+    padding:9px 12px;
+    margin:0;
+    font-size:14px;
+}
+
+.total{
+    font-size:25px;
+    font-weight:bold;
+    color:#198754;
+    text-align:center;
+    padding:10px;
+}
+
+.result{
+    background:#eef8ff;
+    padding:15px;
+    border-radius:10px;
+    margin-top:10px;
+    display:none;
+}
+
+.bill-item{
+    padding:8px 0;
+    border-bottom:1px solid #ddd;
+}
+
+.lang{
+    background:#ffc107;
+    color:#222;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>🛒 Dukaan Bill & Price</h1>
+    <p>दुकान का Price और Bill Calculator</p>
+</header>
+
+<div class="container">
+
+    <!-- Language -->
+    <div class="card">
+        <button class="lang" onclick="toggleLanguage()" id="languageBtn">
+            हिंदी / English
+        </button>
+    </div>
+
+    <!-- Add Product -->
+    <div class="card">
+        <h2 id="addTitle">➕ Add Product / सामान जोड़ें</h2>
+
+        <input
+            type="text"
+            id="productName"
+            placeholder="Product name / सामान का नाम"
+        >
+
+        <input
+            type="number"
+            id="productPrice"
+            placeholder="Price per KG / ₹ प्रति किलो"
+            step="0.01"
+        >
+
+        <button onclick="addProduct()" id="addBtn">
+            Add Product / सामान जोड़ें
+        </button>
+    </div>
+
+    <!-- Products -->
+    <div class="card">
+        <h2 id="listTitle">📋 Price List / सामान की कीमत</h2>
+
+        <div id="productList"></div>
+    </div>
+
+    <!-- Calculator -->
+    <div class="card">
+
+        <h2 id="calcTitle">🧮 Calculate Bill / बिल निकालें</h2>
+
+        <select id="productSelect" onchange="showCalculator()">
+            <option value="">Select Product / सामान चुनें</option>
+        </select>
+
+        <div id="calculatorBox" style="display:none;">
+
+            <p id="selectedPrice"></p>
+
+            <input
+                type="number"
+                id="quantity"
+                placeholder="Enter KG / किलो डालें"
+                step="0.001"
+                min="0"
+                oninput="calculateCurrent()"
+            >
+
+            <div class="result" id="currentResult"></div>
+
+            <button class="green" onclick="addToBill()" id="billBtn">
+                Add to Bill / बिल में जोड़ें
+            </button>
+
+        </div>
+    </div>
+
+    <!-- Bill -->
+    <div class="card">
+
+        <h2 id="billTitle">🧾 Current Bill / वर्तमान बिल</h2>
+
+        <div id="billList">
+            <p>No items added / कोई सामान नहीं जोड़ा गया</p>
+        </div>
+
+        <div class="total">
+            ₹<span id="grandTotal">0.00</span>
+        </div>
+
+        <button class="red" onclick="clearBill()" id="clearBtn">
+            Clear Bill / बिल साफ करें
+        </button>
+
+    </div>
+
+</div>
+
+<script>
+
+let products = JSON.parse(localStorage.getItem("dukaanProducts")) || [];
+
+let bill = [];
+
+let hindi = false;
+
+
+// =========================
+// ADD PRODUCT
+// =========================
+
+function addProduct(){
+
+    const name = document.getElementById("productName").value.trim();
+
+    const price = parseFloat(
+        document.getElementById("productPrice").value
+    );
+
+    if(!name || isNaN(price) || price <= 0){
+        alert(
+            hindi
+            ? "कृपया सामान का नाम और सही कीमत डालें।"
+            : "Please enter product name and valid price."
+        );
+        return;
+    }
+
+    products.push({
+        id: Date.now(),
+        name:name,
+        price:price
+    });
+
+    localStorage.setItem(
+        "dukaanProducts",
+        JSON.stringify(products)
+    );
+
+    document.getElementById("productName").value="";
+    document.getElementById("productPrice").value="";
+
+    renderProducts();
+    updateSelect();
+}
+
+
+// =========================
+// DISPLAY PRODUCTS
+// =========================
+
+function renderProducts(){
+
+    const list = document.getElementById("productList");
+
+    list.innerHTML="";
+
+    if(products.length === 0){
+
+        list.innerHTML =
+        hindi
+        ? "<p>अभी कोई सामान नहीं है।</p>"
+        : "<p>No products added yet.</p>";
+
+        return;
+    }
+
+    products.forEach(product => {
+
+        const div = document.createElement("div");
+
+        div.className="product";
+
+        div.innerHTML = `
+
+            <div class="product-info">
+
+                <div class="product-name">
+                    ${escapeHTML(product.name)}
+                </div>
+
+                <div class="price">
+                    ₹${product.price.toFixed(2)} / KG
+                </div>
+
+            </div>
+
+            <button
+                class="red small-btn"
+                onclick="deleteProduct(${product.id})"
+            >
+                🗑️
+            </button>
+        `;
+
+        list.appendChild(div);
+
+    });
+}
+
+
+// =========================
+// UPDATE DROPDOWN
+// =========================
+
+function updateSelect(){
+
+    const select =
+        document.getElementById("productSelect");
+
+    select.innerHTML = `
+        <option value="">
+            ${hindi
+            ? "सामान चुनें"
+            : "Select Product"}
+        </option>
+    `;
+
+    products.forEach(product => {
+
+        const option =
+            document.createElement("option");
+
+        option.value=product.id;
+
+        option.textContent =
+            `${product.name} - ₹${product.price}/kg`;
+
+        select.appendChild(option);
+
+    });
+}
+
+
+// =========================
+// DELETE PRODUCT
+// =========================
+
+function deleteProduct(id){
+
+    if(!confirm(
+        hindi
+        ? "क्या आप यह सामान हटाना चाहते हैं?"
+        : "Delete this product?"
+    )) return;
+
+    products =
+        products.filter(p => p.id !== id);
+
+    localStorage.setItem(
+        "dukaanProducts",
+        JSON.stringify(products)
+    );
+
+    renderProducts();
+    updateSelect();
+
+}
+
+
+// =========================
+// CALCULATOR
+// =========================
+
+function showCalculator(){
+
+    const id =
+        Number(document.getElementById("productSelect").value);
+
+    const box =
+        document.getElementById("calculatorBox");
+
+    if(!id){
+
+        box.style.display="none";
+        return;
+    }
+
+    const product =
+        products.find(p => p.id === id);
+
+    box.style.display="block";
+
+    document.getElementById("selectedPrice").innerHTML =
+        `<b>${escapeHTML(product.name)}</b>
+        <br>₹${product.price.toFixed(2)} / KG`;
+
+    document.getElementById("quantity").value="";
+
+    document.getElementById("currentResult").style.display="none";
+
+}
+
+
+// =========================
+// CURRENT CALCULATION
+// =========================
+
+function calculateCurrent(){
+
+    const id =
+        Number(document.getElementById("productSelect").value);
+
+    const quantity =
+        parseFloat(document.getElementById("quantity").value);
+
+    if(!id || isNaN(quantity) || quantity <= 0){
+
+        document.getElementById("currentResult").style.display="none";
+
+        return;
+    }
+
+    const product =
+        products.find(p => p.id === id);
+
+    const total =
+        product.price * quantity;
+
+    const result =
+        document.getElementById("currentResult");
+
+    result.style.display="block";
+
+    result.innerHTML = `
+
+        <b>${hindi ? "हिसाब:" : "Calculation:"}</b>
+
+        <br>
+
+        ${quantity} KG × ₹${product.price.toFixed(2)}
+
+        <br><br>
+
+        <strong style="font-size:22px;">
+            ${hindi ? "कुल:" : "Total:"}
+            ₹${total.toFixed(2)}
+        </strong>
+
+    `;
+}
+
+
+// =========================
+// ADD TO BILL
+// =========================
+
+function addToBill(){
+
+    const id =
+        Number(document.getElementById("productSelect").value);
+
+    const quantity =
+        parseFloat(document.getElementById("quantity").value);
+
+    if(!id || isNaN(quantity) || quantity <= 0){
+
+        alert(
+            hindi
+            ? "कृपया सामान और मात्रा डालें।"
+            : "Please select product and enter quantity."
+        );
+
+        return;
+    }
+
+    const product =
+        products.find(p => p.id === id);
+
+    bill.push({
+
+        name:product.name,
+
+        price:product.price,
+
+        quantity:quantity,
+
+        total:product.price * quantity
+
+    });
+
+    renderBill();
+
+    document.getElementById("quantity").value="";
+
+    document.getElementById("currentResult").style.display="none";
+
+}
+
+
+// =========================
+// RENDER BILL
+// =========================
+
+function renderBill(){
+
+    const list =
+        document.getElementById("billList");
+
+    list.innerHTML="";
+
+    if(bill.length === 0){
+
+        list.innerHTML =
+        `<p>
+        ${hindi
+        ? "कोई सामान नहीं जोड़ा गया"
+        : "No items added"}
+        </p>`;
+
+        document.getElementById("grandTotal").textContent =
+            "0.00";
+
+        return;
+    }
+
+    let grandTotal=0;
+
+    bill.forEach((item,index)=>{
+
+        grandTotal += item.total;
+
+        const div =
+            document.createElement("div");
+
+        div.className="bill-item";
+
+        div.innerHTML = `
+
+            <b>${escapeHTML(item.name)}</b>
+
+            <br>
+
+            ${item.quantity} KG × ₹${item.price.toFixed(2)}
+
+            = <b>₹${item.total.toFixed(2)}</b>
+
+            <button
+                class="red small-btn"
+                onclick="removeBillItem(${index})"
+            >
+                ✕
+            </button>
+
+        `;
+
+        list.appendChild(div);
+
+    });
+
+    document.getElementById("grandTotal").textContent =
+        grandTotal.toFixed(2);
+
+}
+
+
+// =========================
+// REMOVE BILL ITEM
+// =========================
+
+function removeBillItem(index){
+
+    bill.splice(index,1);
+
+    renderBill();
+
+}
+
+
+// =========================
+// CLEAR BILL
+// =========================
+
+function clearBill(){
+
+    bill=[];
+
+    renderBill();
+
+}
+
+
+// =========================
+// LANGUAGE
+// =========================
+
+function toggleLanguage(){
+
+    hindi=!hindi;
+
+    document.getElementById("addTitle").textContent =
+        hindi
+        ? "➕ सामान जोड़ें"
+        : "➕ Add Product / सामान जोड़ें";
+
+    document.getElementById("addBtn").textContent =
+        hindi
+        ? "सामान जोड़ें"
+        : "Add Product / सामान जोड़ें";
+
+    document.getElementById("listTitle").textContent =
+        hindi
+        ? "📋 सामान की कीमत"
+        : "📋 Price List / सामान की कीमत";
+
+    document.getElementById("calcTitle").textContent =
+        hindi
+        ? "🧮 बिल निकालें"
+        : "🧮 Calculate Bill / बिल निकालें";
+
+    document.getElementById("billTitle").textContent =
+        hindi
+        ? "🧾 वर्तमान बिल"
+        : "🧾 Current Bill / वर्तमान बिल";
+
+    document.getElementById("billBtn").textContent =
+        hindi
+        ? "बिल में जोड़ें"
+        : "Add to Bill / बिल में जोड़ें";
+
+    document.getElementById("clearBtn").textContent =
+        hindi
+        ? "बिल साफ करें"
+        : "Clear Bill / बिल साफ करें";
+
+    document.getElementById("productName").placeholder =
+        hindi
+        ? "सामान का नाम"
+        : "Product name / सामान का नाम";
+
+    document.getElementById("productPrice").placeholder =
+        hindi
+        ? "₹ प्रति किलो"
+        : "Price per KG / ₹ प्रति किलो";
+
+    document.getElementById("quantity").placeholder =
+        hindi
+        ? "कितना किलो?"
+        : "Enter KG / किलो डालें";
+
+    renderProducts();
+    updateSelect();
+    renderBill();
+
+}
+
+
+// =========================
+// SECURITY
+// =========================
+
+function escapeHTML(text){
+
+    const div =
+        document.createElement("div");
+
+    div.textContent=text;
+
+    return div.innerHTML;
+}
+
+
+// =========================
+// START APP
+// =========================
+
+renderProducts();
+updateSelect();
+renderBill();
+
+</script>
+
+</body>
+</html>
